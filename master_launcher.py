@@ -2,12 +2,6 @@ import os, sys, time, json, subprocess
 import urllib.request
 from rich.console import Console
 
-# Import modul termios untuk membilas (flush) keyboard buffer
-try:
-    import termios
-except ImportError:
-    pass
-
 console = Console()
 CONFIG_FILE = "arsy_config.json"
 
@@ -17,6 +11,31 @@ MODULES_URL = [
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/discord_bot.py",
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/core.py"
 ]
+
+# --- JURUS SAKTI: SMART INPUT (ANTI GHOST ENTER & ANTI SPAM) ---
+def smart_input(prompt_text, required=True):
+    while True:
+        start_time = time.time()
+        ans = console.input(prompt_text).strip()
+        elapsed = time.time() - start_time
+        
+        if ans:
+            return ans
+            
+        # Jika Enter sangat cepat (< 0.2 detik), itu pasti Ghost Enter.
+        # Hapus baris tersebut dan ulang tanpa sisa visual!
+        if elapsed < 0.2:
+            sys.stdout.write("\033[1A\033[2K") 
+            sys.stdout.flush()
+            continue
+            
+        # Jika kosong dan opsional (manusia yang tekan Enter)
+        if not required:
+            return ""
+            
+        # Jika kosong tapi wajib isi, hapus baris dan paksa isi ulang
+        sys.stdout.write("\033[1A\033[2K")
+        sys.stdout.flush()
 
 # --- Cek Fitur Reset ---
 if len(sys.argv) > 1 and sys.argv[1] == "--reset":
@@ -40,7 +59,7 @@ def main_menu():
     console.print("[bold yellow][ 2 ][/bold yellow] ⚙️ Reset / Ganti Pengaturan Device")
     console.print("[bold red][ 3 ][/bold red] ❌ Keluar Aplikasi\n")
     
-    pilihan = console.input("[bold yellow]👉 Masukkan angka (1/2/3): [/bold yellow]").strip()
+    pilihan = smart_input("[bold yellow]👉 Masukkan angka (1/2/3): [/bold yellow]")
     
     if pilihan == '2':
         if os.path.exists(CONFIG_FILE):
@@ -60,31 +79,15 @@ def main_menu():
 
 main_menu()
 
-# 1. PERBAIKAN BUG: Filter Pencarian Aplikasi Super Ketat
-raw_pkgs = subprocess.getoutput("pm list packages | grep roblox")
-apps = []
-for line in raw_pkgs.split('\n'):
-    line = line.strip()
-    if line.startswith("package:"): # Hanya ambil yang benar-benar nama aplikasi
-        pkg_name = line.replace("package:", "").strip()
-        if pkg_name:
-            apps.append(pkg_name)
+# 1. PERBAIKAN BUG: Kembalikan metode pencarian aplikasi yang akurat
+pkgs = subprocess.getoutput("pm list packages | grep roblox").split('\n')
+apps = [p.split(':')[1].strip() for p in pkgs if ':' in p and 'roblox' in p]
 
 if not apps:
     console.print("\n[bold red]❌ Tidak ada aplikasi Roblox ditemukan![/bold red]")
     sys.exit()
 
-# ==========================================
-# JURUS SAKTI 1: MEMBILAS KEYBOARD BUFFER
-# ==========================================
-try:
-    termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
-except:
-    pass
-time.sleep(0.5)
-# ==========================================
-
-# 2. SETUP WIZARD
+# 2. SETUP WIZARD (Menggunakan Smart Input)
 config = {"device_name": "", "ps_link": "", "webhook": "", "apps": {}, "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
     try:
@@ -98,39 +101,18 @@ if apps_to_configure or not config.get("device_name"):
     console.print(f"\n[bold magenta]🛠️ SETUP WIZARD[/bold magenta]")
     
     if not config.get("device_name"):
-        while True:
-            dn = console.input("[bold yellow]👉 Nama Device (Misal: DEVICE 1): [/bold yellow]").strip()
-            if dn:
-                config["device_name"] = dn
-                new_setup = True
-                break
-            # Jika kosong, abaikan diam-diam dan ulang pertanyaan
+        config["device_name"] = smart_input("[bold yellow]👉 Nama Device (Misal: DEVICE 1): [/bold yellow]", required=True)
+        new_setup = True
 
     if apps_to_configure:
         for app in apps_to_configure:
-            while True:
-                acc_id = console.input(f"[bold yellow]👉 Nama Akun untuk [{app}]: [/bold yellow]").strip()
-                if acc_id:
-                    config["apps"][app] = acc_id
-                    new_setup = True
-                    break
-                # Jika kosong, abaikan diam-diam
+            config["apps"][app] = smart_input(f"[bold yellow]👉 Nama Akun untuk [[white]{app}[/white]]: [/bold yellow]", required=True)
+            new_setup = True
 
-    # --- PENGATURAN LINK & DISCORD ---
     if "ps_link" not in config or not os.path.exists(CONFIG_FILE):
-        
-        # Bilas buffer ke-2: Mencegah sisa ketikan enter dari nama akun
-        try:
-            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
-        except:
-            pass
-        time.sleep(0.2)
-        
         console.print("\n[bold cyan]-- Pengaturan Jaringan & Discord --[/bold cyan]")
-        
-        # Format Baru: Memaksa input diketik di baris baru (\n➤) agar UI tidak tabrakan
-        config["ps_link"] = console.input("[bold yellow]👉 Link Private Server (Kosong = Normal):\n➤ [/bold yellow]").strip()
-        config["webhook"] = console.input("\n[bold yellow]👉 URL Webhook Discord (Opsional):\n➤ [/bold yellow]").strip()
+        config["ps_link"] = smart_input("[bold yellow]👉 Link Private Server (Kosong = Normal): [/bold yellow]", required=False)
+        config["webhook"] = smart_input("[bold yellow]👉 URL Webhook Discord (Opsional): [/bold yellow]", required=False)
         new_setup = True
 
 if new_setup:
@@ -144,7 +126,7 @@ for app in apps:
 time.sleep(1)
 
 # 4. MENGUNDUH 3 MODUL INTI
-console.print("\n☁️ [white]Menghubungkan ke Server Modular ARSY...[/white]")
+console.print("☁️ [white]Menghubungkan ke Server Modular ARSY...[/white]")
 try:
     global_env = globals()
     for i, url in enumerate(MODULES_URL, 1):
