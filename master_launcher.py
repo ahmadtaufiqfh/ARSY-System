@@ -2,6 +2,12 @@ import os, sys, time, json, subprocess
 import urllib.request
 from rich.console import Console
 
+# Import modul termios untuk membilas (flush) keyboard buffer
+try:
+    import termios
+except ImportError:
+    pass
+
 console = Console()
 CONFIG_FILE = "arsy_config.json"
 
@@ -34,7 +40,6 @@ def main_menu():
     console.print("[bold yellow][ 2 ][/bold yellow] ⚙️ Reset / Ganti Pengaturan Device")
     console.print("[bold red][ 3 ][/bold red] ❌ Keluar Aplikasi\n")
     
-    # MENGGUNAKAN CONSOLE.INPUT AGAR ANTI-GLITCH
     pilihan = console.input("[bold yellow]👉 Masukkan angka (1/2/3): [/bold yellow]").strip()
     
     if pilihan == '2':
@@ -55,7 +60,7 @@ def main_menu():
 
 main_menu()
 
-# 1. Cari Aplikasi Dulu (Tanpa Root)
+# 1. Cari Aplikasi Dulu (Perintah ini yg menghasilkan sampah Ghost Enter)
 pkgs = subprocess.getoutput("pm list packages | grep roblox").split('\n')
 apps = [p.split(':')[1].strip() for p in pkgs if p]
 
@@ -63,7 +68,18 @@ if not apps:
     console.print("\n[bold red]❌ Tidak ada aplikasi Roblox ditemukan![/bold red]")
     sys.exit()
 
-# 2. SETUP WIZARD (ANTI-SKIP SYSTEM)
+# ==========================================
+# JURUS SAKTI: MEMBILAS KEYBOARD BUFFER
+# ==========================================
+try:
+    # TCIFLUSH: Menghapus semua input yang menggantung di memori
+    termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+except:
+    pass
+time.sleep(0.5) # Beri jeda sejenak agar sistem bernapas
+# ==========================================
+
+# 2. SETUP WIZARD (Kini Keyboard Sudah Bersih)
 config = {"device_name": "", "ps_link": "", "webhook": "", "apps": {}, "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
     try:
@@ -76,7 +92,6 @@ apps_to_configure = [app for app in apps if app not in config["apps"]]
 if apps_to_configure or not config.get("device_name"):
     console.print(f"\n[bold magenta]🛠️ SETUP WIZARD[/bold magenta]")
     
-    # Paksa isi Nama Device
     if not config.get("device_name"):
         while True:
             dn = console.input("[bold yellow]👉 Nama Device (Misal: DEVICE 1): [/bold yellow]").strip()
@@ -87,7 +102,6 @@ if apps_to_configure or not config.get("device_name"):
             else:
                 console.print("[red]⚠️ Nama Device tidak boleh kosong![/red]")
 
-    # Paksa isi Nama Akun
     if apps_to_configure:
         for app in apps_to_configure:
             while True:
@@ -109,24 +123,11 @@ if new_setup:
     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
     console.print("[bold green]✅ Setup Disimpan![/bold green]\n")
 
-# 3. PEMBERSIHAN (Baru menggunakan Root)
+# 3. PEMBERSIHAN (Force Stop)
 console.print("\n[yellow]🧹 Membersihkan background service...[/yellow]")
 for app in apps:
     run_root(f"am force-stop {app}")
 time.sleep(1)
 
 # 4. MENGUNDUH 3 MODUL INTI
-console.print("☁️ [white]Menghubungkan ke Server Modular ARSY...[/white]")
-try:
-    global_env = globals()
-    for i, url in enumerate(MODULES_URL, 1):
-        console.print(f"[cyan]⬇️  Merakit modul {i}/{len(MODULES_URL)} ke RAM...[/cyan]")
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as response:
-            module_code = response.read().decode('utf-8')
-        
-        exec(module_code, global_env)
-        time.sleep(0.5)
-        
-except Exception as e:
-    console.print(f"[bold red]❌ Gagal terhubung ke server/merakit modul: {e}[/bold red]")
+console.print("☁️ [white]Menghubungkan ke Server Modular
