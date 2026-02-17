@@ -24,7 +24,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "--reset":
         os.remove(CONFIG_FILE)
         console.print("[bold green]✅ Reset Berhasil! Konfigurasi telah dihapus.[/bold green]")
     else:
-        console.print("[yellow]⚠️ Tidak ada data untuk direset.[/yellow]")
+        console.print("\n[yellow]⚠️ Tidak ada data untuk direset.[/yellow]")
     sys.exit()
 
 def run_root(command):
@@ -60,26 +60,31 @@ def main_menu():
 
 main_menu()
 
-# 1. Cari Aplikasi Dulu (Perintah ini yg menghasilkan sampah Ghost Enter)
-pkgs = subprocess.getoutput("pm list packages | grep roblox").split('\n')
-apps = [p.split(':')[1].strip() for p in pkgs if p]
+# 1. PERBAIKAN BUG: Filter Pencarian Aplikasi Super Ketat
+raw_pkgs = subprocess.getoutput("pm list packages | grep roblox")
+apps = []
+for line in raw_pkgs.split('\n'):
+    line = line.strip()
+    if line.startswith("package:"): # Hanya ambil yang benar-benar nama aplikasi
+        pkg_name = line.replace("package:", "").strip()
+        if pkg_name:
+            apps.append(pkg_name)
 
 if not apps:
     console.print("\n[bold red]❌ Tidak ada aplikasi Roblox ditemukan![/bold red]")
     sys.exit()
 
 # ==========================================
-# JURUS SAKTI: MEMBILAS KEYBOARD BUFFER
+# JURUS SAKTI 1: MEMBILAS KEYBOARD BUFFER
 # ==========================================
 try:
-    # TCIFLUSH: Menghapus semua input yang menggantung di memori
     termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
 except:
     pass
-time.sleep(0.5) # Beri jeda sejenak agar sistem bernapas
+time.sleep(0.5)
 # ==========================================
 
-# 2. SETUP WIZARD (Kini Keyboard Sudah Bersih)
+# 2. SETUP WIZARD
 config = {"device_name": "", "ps_link": "", "webhook": "", "apps": {}, "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
     try:
@@ -99,8 +104,7 @@ if apps_to_configure or not config.get("device_name"):
                 config["device_name"] = dn
                 new_setup = True
                 break
-            else:
-                console.print("[red]⚠️ Nama Device tidak boleh kosong![/red]")
+            # Jika kosong, abaikan diam-diam dan ulang pertanyaan
 
     if apps_to_configure:
         for app in apps_to_configure:
@@ -110,24 +114,47 @@ if apps_to_configure or not config.get("device_name"):
                     config["apps"][app] = acc_id
                     new_setup = True
                     break
-                else:
-                    console.print("[red]⚠️ Nama Akun tidak boleh kosong![/red]")
+                # Jika kosong, abaikan diam-diam
 
+    # --- PENGATURAN LINK & DISCORD ---
     if "ps_link" not in config or not os.path.exists(CONFIG_FILE):
-        print("")
-        config["ps_link"] = console.input("[bold yellow]👉 Link Private Server (Kosong = Normal): [/bold yellow]").strip()
-        config["webhook"] = console.input("[bold yellow]👉 URL Webhook Discord (Opsional): [/bold yellow]").strip()
+        
+        # Bilas buffer ke-2: Mencegah sisa ketikan enter dari nama akun
+        try:
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        except:
+            pass
+        time.sleep(0.2)
+        
+        console.print("\n[bold cyan]-- Pengaturan Jaringan & Discord --[/bold cyan]")
+        
+        # Format Baru: Memaksa input diketik di baris baru (\n➤) agar UI tidak tabrakan
+        config["ps_link"] = console.input("[bold yellow]👉 Link Private Server (Kosong = Normal):\n➤ [/bold yellow]").strip()
+        config["webhook"] = console.input("\n[bold yellow]👉 URL Webhook Discord (Opsional):\n➤ [/bold yellow]").strip()
         new_setup = True
 
 if new_setup:
     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
-    console.print("[bold green]✅ Setup Disimpan![/bold green]\n")
+    console.print("\n[bold green]✅ Setup Disimpan![/bold green]\n")
 
-# 3. PEMBERSIHAN (Force Stop)
-console.print("\n[yellow]🧹 Membersihkan background service...[/yellow]")
+# 3. PEMBERSIHAN (Baru menggunakan Root)
+console.print("[yellow]🧹 Membersihkan background service...[/yellow]")
 for app in apps:
     run_root(f"am force-stop {app}")
 time.sleep(1)
 
 # 4. MENGUNDUH 3 MODUL INTI
-console.print("☁️ [white]Menghubungkan ke Server Modular
+console.print("\n☁️ [white]Menghubungkan ke Server Modular ARSY...[/white]")
+try:
+    global_env = globals()
+    for i, url in enumerate(MODULES_URL, 1):
+        console.print(f"[cyan]⬇️  Merakit modul {i}/{len(MODULES_URL)} ke RAM...[/cyan]")
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req) as response:
+            module_code = response.read().decode('utf-8')
+        
+        exec(module_code, global_env)
+        time.sleep(0.5)
+        
+except Exception as e:
+    console.print(f"[bold red]❌ Gagal terhubung ke server/merakit modul: {e}[/bold red]")
