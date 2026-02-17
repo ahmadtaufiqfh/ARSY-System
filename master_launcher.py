@@ -5,7 +5,7 @@ from rich.console import Console
 console = Console()
 CONFIG_FILE = "arsy_config.json"
 
-# 👇 3 LINK RAW MODUL ANDA (SUDAH TERPASANG) 👇
+# 👇 3 LINK RAW MODUL ANDA 👇
 MODULES_URL = [
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/ram_sensor.py",
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/discord_bot.py",
@@ -54,6 +54,7 @@ def main_menu():
 
 main_menu()
 
+# 1. Cari Aplikasi Dulu (Tanpa Root)
 pkgs = subprocess.getoutput("pm list packages | grep roblox").split('\n')
 apps = [p.split(':')[1].strip() for p in pkgs if p]
 
@@ -61,11 +62,7 @@ if not apps:
     console.print("\n[bold red]❌ Tidak ada aplikasi Roblox ditemukan![/bold red]")
     sys.exit()
 
-console.print("\n[yellow]🧹 Membersihkan background service...[/yellow]")
-for app in apps:
-    run_root(f"am force-stop {app}")
-time.sleep(1)
-
+# 2. SETUP WIZARD PINDAH KE SINI (Dijalankan sebelum Root/Pembersihan)
 config = {"device_name": "", "ps_link": "", "webhook": "", "apps": {}, "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
     try:
@@ -98,7 +95,13 @@ if new_setup:
     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
     console.print("[bold green]✅ Setup Disimpan![/bold green]\n")
 
-# --- MENGUNDUH 3 MODUL INTI ---
+# 3. PEMBERSIHAN (Baru menggunakan Root)
+console.print("\n[yellow]🧹 Membersihkan background service...[/yellow]")
+for app in apps:
+    run_root(f"am force-stop {app}")
+time.sleep(1)
+
+# 4. MENGUNDUH 3 MODUL INTI
 console.print("☁️ [white]Menghubungkan ke Server Modular ARSY...[/white]")
 try:
     global_env = globals()
