@@ -34,7 +34,8 @@ def main_menu():
     console.print("[bold yellow][ 2 ][/bold yellow] ⚙️ Reset / Ganti Pengaturan Device")
     console.print("[bold red][ 3 ][/bold red] ❌ Keluar Aplikasi\n")
     
-    pilihan = input("👉 Masukkan angka (1/2/3): ").strip()
+    # MENGGUNAKAN CONSOLE.INPUT AGAR ANTI-GLITCH
+    pilihan = console.input("[bold yellow]👉 Masukkan angka (1/2/3): [/bold yellow]").strip()
     
     if pilihan == '2':
         if os.path.exists(CONFIG_FILE):
@@ -62,7 +63,7 @@ if not apps:
     console.print("\n[bold red]❌ Tidak ada aplikasi Roblox ditemukan![/bold red]")
     sys.exit()
 
-# 2. SETUP WIZARD PINDAH KE SINI (Dijalankan sebelum Root/Pembersihan)
+# 2. SETUP WIZARD (ANTI-SKIP SYSTEM)
 config = {"device_name": "", "ps_link": "", "webhook": "", "apps": {}, "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
     try:
@@ -72,23 +73,36 @@ if os.path.exists(CONFIG_FILE):
 new_setup = False
 apps_to_configure = [app for app in apps if app not in config["apps"]]
 
-if apps_to_configure or not os.path.exists(CONFIG_FILE):
+if apps_to_configure or not config.get("device_name"):
     console.print(f"\n[bold magenta]🛠️ SETUP WIZARD[/bold magenta]")
     
+    # Paksa isi Nama Device
     if not config.get("device_name"):
-        config["device_name"] = input("👉 Nama Device (Misal: DEVICE 1): ").strip()
-        new_setup = True
+        while True:
+            dn = console.input("[bold yellow]👉 Nama Device (Misal: DEVICE 1): [/bold yellow]").strip()
+            if dn:
+                config["device_name"] = dn
+                new_setup = True
+                break
+            else:
+                console.print("[red]⚠️ Nama Device tidak boleh kosong![/red]")
 
+    # Paksa isi Nama Akun
     if apps_to_configure:
         for app in apps_to_configure:
-            acc_id = input(f"👉 Nama Akun untuk [{app}]: ").strip()
-            config["apps"][app] = acc_id if acc_id else app
-            new_setup = True
+            while True:
+                acc_id = console.input(f"[bold yellow]👉 Nama Akun untuk [{app}]: [/bold yellow]").strip()
+                if acc_id:
+                    config["apps"][app] = acc_id
+                    new_setup = True
+                    break
+                else:
+                    console.print("[red]⚠️ Nama Akun tidak boleh kosong![/red]")
 
     if "ps_link" not in config or not os.path.exists(CONFIG_FILE):
         print("")
-        config["ps_link"] = input("👉 Link Private Server (Kosong = Normal): ").strip()
-        config["webhook"] = input("👉 URL Webhook Discord (Opsional): ").strip()
+        config["ps_link"] = console.input("[bold yellow]👉 Link Private Server (Kosong = Normal): [/bold yellow]").strip()
+        config["webhook"] = console.input("[bold yellow]👉 URL Webhook Discord (Opsional): [/bold yellow]").strip()
         new_setup = True
 
 if new_setup:
