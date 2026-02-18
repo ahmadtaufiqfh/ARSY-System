@@ -5,8 +5,11 @@ def format_discord_uptime(seconds):
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 def update_discord_dashboard(config, current_status_dict, start_time_dict, ram_used, ram_total, mode_text):
-    webhook = config.get("webhook", "")
-    if not webhook: return
+    raw_webhook = config.get("webhook", "")
+    if not raw_webhook: return
+    
+    # [ANTI-SPAM 1] Membersihkan link webhook dari parameter pengganggu agar fungsi Edit bekerja
+    webhook = raw_webhook.split("?")[0].rstrip("/")
     
     device_name = config.get("device_name", "DEVICE").upper()
     account_map = config.get("apps", {})
@@ -45,19 +48,17 @@ def update_discord_dashboard(config, current_status_dict, start_time_dict, ram_u
     msg_id = config.get("live_msg_id", "")
     try:
         if msg_id:
+            # Mencoba mengedit pesan yang sudah ada
             res = requests.patch(f"{webhook}/messages/{msg_id}", json={"embeds": [embed]}, timeout=5)
-            if res.status_code in [200, 204]: return
+            if res.status_code in [200, 204]: return # Sukses edit, hentikan (jangan spam)
+        
+        # Jika belum ada pesan, buat SATU KALI SAJA lalu simpan ID-nya
         res = requests.post(f"{webhook}?wait=true", json={"embeds": [embed]}, timeout=5)
         if res.status_code in [200, 201]:
             config["live_msg_id"] = res.json().get("id")
             with open("arsy_config.json", "w") as f: json.dump(config, f, indent=4)
     except: pass
 
+# [ANTI-SPAM 2] Fungsi Alarm Dimatikan secara paksa (Mute)
 def send_emergency_ping(config, usn):
-    webhook = config.get("webhook", "")
-    device = config.get("device_name", "DEVICE")
-    if not webhook: return
-    try:
-        ping_teks = f"🚨 **ALERT [{device}]:** Akun/ID `{usn}` Gagal Login > 3 Menit! Indikasi Banned / Link VIP Error."
-        requests.post(webhook, json={"content": ping_teks}, timeout=5)
-    except: pass
+    pass
