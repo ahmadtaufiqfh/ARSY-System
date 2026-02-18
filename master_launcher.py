@@ -10,31 +10,26 @@ MODULES_URL = [
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/core.py"
 ]
 
-# 👇 FUNGSI PEMBERSIH GHOST ENTER 👇
-def clear_input_buffer():
-    try:
-        import termios
-        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
-    except:
-        pass
-
+# 👇 FUNGSI INPUT SENSOR WAKTU ANTI-GHOST ENTER 👇
 def safe_input(prompt_text, required=True):
-    clear_input_buffer() # Sedot sisa enter sebelum bertanya
-    time.sleep(0.2) # Jeda milidetik agar Termux stabil
-    
     while True:
         console.print(prompt_text, end="")
+        start_time = time.time() # Mulai Stopwatch
         try:
             ans = input().strip()
         except EOFError:
             ans = ""
             
+        elapsed = time.time() - start_time # Hentikan Stopwatch
+        
+        # Jika masuknya kilat (< 0.2 detik) dan kosong, itu pasti ulah Redfinger. Abaikan!
+        if ans == "" and elapsed < 0.2:
+            continue
+            
         if ans: return ans
         if not required: return ""
         
         console.print("[red]⚠ Bagian ini wajib diisi![/red]\n")
-        time.sleep(0.3)
-        clear_input_buffer()
 
 config = {"device_name": "", "ps_link": "", "webhook": "", "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
@@ -71,37 +66,4 @@ def main_menu():
         os.system('clear')
         console.print("[bold cyan]╔══════════════════════════════════════╗[/bold cyan]")
         console.print("[bold cyan]║          ARSY MONITOR LOG            ║[/bold cyan]")
-        console.print("[bold cyan]╚══════════════════════════════════════╝[/bold cyan]\n")
-        console.print("[bold white]Silakan pilih menu:[/bold white]")
-        console.print("[bold green][ 1 ][/bold green] Mulai Monitoring & Auto-Farming")
-        console.print("[bold yellow][ 2 ][/bold yellow] Pengaturan (Ganti Link / Webhook)")
-        console.print("[bold red][ 3 ][/bold red] Keluar Aplikasi\n")
-        
-        p = safe_input("[bold yellow]Masukkan angka (1/2/3): [/bold yellow]")
-        if p == '1': return
-        elif p == '2': reset_menu()
-        elif p == '3': sys.exit()
-
-if not config.get("device_name"):
-    os.system('clear')
-    console.print("[bold magenta]SETUP WIZARD (HANYA 1X)[/bold magenta]\n")
-    config["device_name"] = safe_input("[bold yellow]Nama Device (Misal: DEVICE 1):\n> [/bold yellow]", required=True)
-    config["ps_link"] = safe_input("\n[bold yellow]Link Private Server (Kosong = Normal):\n> [/bold yellow]", required=False)
-    config["webhook"] = safe_input("\n[bold yellow]URL Webhook Discord (Opsional):\n> [/bold yellow]", required=False)
-    save_config()
-    console.print("\n[bold green]Setup Tersimpan! Memasuki Sistem...[/bold green]")
-    time.sleep(1)
-
-main_menu()
-
-os.system('clear')
-console.print("\n[bold white]Process.........[/bold white]")
-try:
-    global_env = globals()
-    for url in MODULES_URL:
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as response:
-            exec(response.read().decode('utf-8'), global_env)
-except Exception as e:
-    console.print(f"\n[bold red]Gagal merakit modul: {e}[/bold red]")
-    sys.exit()
+        console.print("[bold cyan]╚══════════════════════════════════════╝[/bold cyan]\
