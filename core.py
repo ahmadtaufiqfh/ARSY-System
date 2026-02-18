@@ -4,6 +4,14 @@ from rich import box
 from rich.panel import Panel
 
 CHECK_INTERVAL = 15
+CONFIG_FILE = "arsy_config.json"
+
+config = {}
+if os.path.exists(CONFIG_FILE):
+    try:
+        with open(CONFIG_FILE, "r") as f: config.update(json.load(f))
+    except: pass
+
 ps_link = config.get("ps_link", "")
 
 try:
@@ -42,7 +50,6 @@ def get_app_ram(pkg):
     return "0 MB"
 
 def launch_app(pkg):
-    # Menyembunyikan output terminal bawaan Android agar rapi (stdout=DEVNULL)
     subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
     if ps_link == "": 
@@ -94,12 +101,12 @@ while True:
                     config["apps"] = account_map
                     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
                 else:
-                    if uptime_sec > 180:
-                        # Gagal 3 Menit: Force Stop (Loop selanjutnya akan otomatis Relaunch)
+                    if uptime_sec > 180: # KEMBALI KE 180 DETIK (3 MENIT)
                         state["status"] = "🔴 Disconnect"
                         subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         try:
-                            send_emergency_ping(config, state["usn"])
+                            if "send_emergency_ping" in globals():
+                                send_emergency_ping(config, state["usn"])
                         except: pass
             else:
                 state["status"] = "🟢 Connect | scriptON"
@@ -130,7 +137,8 @@ while True:
     console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]"))
     
     try:
-        update_discord_dashboard(config, {k: app_states[k]["status"] for k in apps}, {k: app_states[k]["start_time"] for k in apps}, used_mb, mem_tot, "")
+        if "update_discord_dashboard" in globals():
+            update_discord_dashboard(config, {k: app_states[k]["status"] for k in apps}, {k: app_states[k]["start_time"] for k in apps}, used_mb, mem_tot, "")
     except: pass
     
     time.sleep(CHECK_INTERVAL)
