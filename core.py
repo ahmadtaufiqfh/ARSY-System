@@ -82,11 +82,12 @@ def format_uptime(seconds):
 while True:
     os.system('clear')
     
-    table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED, expand=True)
-    table.add_column("IDs", style="white")
-    table.add_column("STATUS", justify="left")
-    table.add_column("UPTIME", justify="center")
-    table.add_column("RAM USAGE", justify="center")
+    # PERBAIKAN UI TERMUX: Menghapus expand=True dan menetapkan batasan teks (no_wrap) agar garis sejajar sempurna
+    table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED)
+    table.add_column("IDs", style="white", no_wrap=True, min_width=15)
+    table.add_column("STATUS", justify="left", no_wrap=True, min_width=22)
+    table.add_column("UPTIME", justify="center", no_wrap=True, min_width=10)
+    table.add_column("RAM USAGE", justify="center", no_wrap=True, min_width=10)
 
     for a in apps:
         state = app_states[a]
@@ -129,7 +130,7 @@ while True:
                                 state["status"] = "⚠️ Suspended"
                                 try:
                                     if "send_emergency_ping" in globals():
-                                        send_emergency_ping(config, state["usn"], "Gagal memuat script 2x berturut-turut. Aplikasi dibiarkan terbuka.")
+                                        send_emergency_ping(config, state["usn"], f"Gagal memuat script 2x. Aplikasi {state['usn']} dibiarkan terbuka (Suspended).")
                                 except: pass
                             else:
                                 state["status"] = "🔴 Disconnect"
@@ -161,7 +162,7 @@ while True:
         used_mb = mem_tot - mem_avl
     except: used_mb, mem_tot = 0, 0
 
-    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]"))
+    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]", expand=False))
     
     try:
         if "update_discord_dashboard" in globals():
