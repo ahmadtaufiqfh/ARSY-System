@@ -10,13 +10,31 @@ MODULES_URL = [
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/core.py"
 ]
 
-# 👇 FUNGSI INPUT BARU YANG ANTI-LONCAT 👇
+# 👇 FUNGSI PEMBERSIH GHOST ENTER 👇
+def clear_input_buffer():
+    try:
+        import termios
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+    except:
+        pass
+
 def safe_input(prompt_text, required=True):
+    clear_input_buffer() # Sedot sisa enter sebelum bertanya
+    time.sleep(0.2) # Jeda milidetik agar Termux stabil
+    
     while True:
-        ans = console.input(prompt_text).strip()
+        console.print(prompt_text, end="")
+        try:
+            ans = input().strip()
+        except EOFError:
+            ans = ""
+            
         if ans: return ans
         if not required: return ""
-        console.print("[red]Bagian ini wajib diisi![/red]\n")
+        
+        console.print("[red]⚠ Bagian ini wajib diisi![/red]\n")
+        time.sleep(0.3)
+        clear_input_buffer()
 
 config = {"device_name": "", "ps_link": "", "webhook": "", "live_msg_id": ""}
 if os.path.exists(CONFIG_FILE):
