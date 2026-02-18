@@ -1,8 +1,7 @@
 import time, os, subprocess, json
-from rich.table import Table
-from rich import box
-from rich.panel import Panel
+from rich.console import Console
 
+console = Console()
 CHECK_INTERVAL = 15
 CONFIG_FILE = "arsy_config.json"
 
@@ -24,7 +23,7 @@ account_map = config.get("apps", {})
 app_states = {}
 for a in apps:
     app_states[a] = {
-        "status": "🟡 Reconnect", 
+        "status": "🟡 WAIT", 
         "start_time": time.time(),
         "usn": account_map.get(a, a),
         "script_on": False,
@@ -52,16 +51,34 @@ def scan_for_usn():
                     usn = filepath.split("arsy_usn_")[-1].replace(".txt", "").strip()
                     subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
                     return usn
-            except:
-                pass
+            except: pass
+    return None
+
+def scan_for_warnings(pkg, usn):
+    if not usn: return None
+    paths_to_check = [
+        f"/sdcard/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/data/media/0/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/sdcard/Delta/workspace"
+    ]
+    for check_path in paths_to_check:
+        try:
+            cmd = f"su -c 'ls {check_path}/arsy_warn_{usn}.txt 2>/dev/null'"
+            res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+            if res:
+                filepath = res.split('\n')[0].strip()
+                content = subprocess.check_output(f"su -c 'cat \"{filepath}\"'", shell=True).decode('utf-8').strip()
+                subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
+                return content
+        except: pass
     return None
 
 def get_app_ram(pkg):
     try:
         res = subprocess.check_output(f"su -c 'dumpsys meminfo {pkg} | grep \"TOTAL:\"'", shell=True).decode('utf-8')
-        if res: return str(int(res.split()[1]) // 1024) + " MB"
+        if res: return str(int(res.split()[1]) // 1024) + " M"
     except: pass
-    return "0 MB"
+    return "0 M"
 
 def launch_app(pkg):
     subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -82,12 +99,7 @@ def format_uptime(seconds):
 while True:
     os.system('clear')
     
-    # PERBAIKAN UI TERMUX: Menggunakan box.MINIMAL (tanpa garis vertikal) & menyingkat header
-    table = Table(title=f"[bold cyan]ARSY MONITOR ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.MINIMAL, expand=False)
-    table.add_column("ID", style="white")
-    table.add_column("STATUS", justify="left")
-    table.add_column("TIME", justify="center")
-    table.add_column("RAM", justify="right")
+    console.print(f"[bold cyan]=== ARSY MONITOR ({config.get('device_name', 'DEV')}) ===[/bold cyan]\n")
 
     for a in apps:
         state = app_states[a]
@@ -100,25 +112,24 @@ while True:
         
         if not is_open:
             if state.get("suspended"):
-                state["status"] = "⚠️ Suspended"
+                state["status"] = "⚠️ SUSP"
             else:
                 state["script_on"] = False
-                state["status"] = "🟡 Reconnect"
+                state["status"] = "🟡 WAIT"
                 state["start_time"] = time.time() 
                 launch_app(a)
         else:
             if not state["script_on"]:
                 if state.get("suspended"):
-                    state["status"] = "⚠️ Suspended"
+                    state["status"] = "⚠️ SUSP"
                 else:
-                    state["status"] = "🟢 Connect"
+                    state["status"] = "🟡 LOAD"
                     new_usn = scan_for_usn()
                     
                     if new_usn:
                         state["usn"] = new_usn
                         state["script_on"] = True
-                        # Sedikit merampingkan teks agar muat di layar sempit
-                        state["status"] = "🟢 Connect|ON"
+                        state["status"] = "🟢 ON"
                         state["fail_count"] = 0
                         account_map[a] = new_usn
                         config["apps"] = account_map
@@ -128,24 +139,42 @@ while True:
                             state["fail_count"] = state.get("fail_count", 0) + 1
                             if state["fail_count"] >= 2:
                                 state["suspended"] = True
-                                state["status"] = "⚠️ Suspended"
+                                state["status"] = "⚠️ SUSP"
                                 try:
                                     if "send_emergency_ping" in globals():
-                                        send_emergency_ping(config, state["usn"], f"Gagal memuat script 2x. Aplikasi {state['usn']} dibiarkan terbuka (Suspended).")
+                                        send_emergency_ping(config, state["usn"], f"Gagal memuat script 2x. Aplikasi dibiarkan terbuka (Suspended).")
                                 except: pass
                             else:
-                                state["status"] = "🔴 Disconnect"
+                                state["status"] = "🔴 DC"
                                 subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
-                state["status"] = "🟢 Connect|ON"
-                state["fail_count"] = 0
+                warn_msg = scan_for_warnings(a, state["usn"])
+                if warn_msg:
+                    reason_text = "Terlempar ke Public Server!" if warn_msg == "PUBLIC_SERVER" else "Terkena Kick / Warning dari Game!"
+                    try:
+                        if "send_emergency_ping" in globals():
+                            send_emergency_ping(config, state["usn"], reason_text)
+                    except: pass
+                    
+                    subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    state["script_on"] = False
+                    state["status"] = "🟡 WAIT"
+                    state["start_time"] = time.time()
+                else:
+                    state["status"] = "🟢 ON"
+                    state["fail_count"] = 0
 
         color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
-        up_str = format_uptime(time.time() - state["start_time"])
+        
+        if "DC" in state["status"] or "SUSP" in state["status"]:
+            up_str = "--:--:--"
+        else:
+            up_str = format_uptime(time.time() - state["start_time"])
+            
         ram_str = get_app_ram(a)
-        table.add_row(state["usn"], f"[{color}]{state['status']}[/{color}]", f"[cyan]{up_str}[/cyan]", f"[white]{ram_str}[/white]")
-
-    console.print(table)
+        
+        console.print(f"👤 [bold white]{state['usn']}[/bold white]")
+        console.print(f" └ [{color}]{state['status']}[/{color}] | ⏱️ {up_str} | 💾 {ram_str}\n")
     
     if time.time() - last_ram_clear > 1800:
         try:
@@ -163,8 +192,7 @@ while True:
         used_mb = mem_tot - mem_avl
     except: used_mb, mem_tot = 0, 0
 
-    # Menghapus Panel border untuk menghemat ruang bawah
-    console.print(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]")
+    console.print(f"[bold green]RAM: {used_mb}M / {mem_tot}M[/bold green]")
     
     try:
         if "update_discord_dashboard" in globals():
