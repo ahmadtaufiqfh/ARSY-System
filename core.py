@@ -33,18 +33,28 @@ for a in apps:
 last_ram_clear = time.time()
 
 def scan_for_usn():
-    try:
-        # PENCARIAN PRESISI: Langsung menembak ke folder workspace milik Gloop
-        cmd = "su -c 'find /sdcard/Android/data/com.roblox.*/files/gloop/workspace -name \"arsy_usn_*.txt\" -print -quit 2>/dev/null'"
-        res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+    # RADAR PENDOBRAK: Cek spesifik ke folder masing-masing aplikasi (Bypass Kebutaan Partisi)
+    for a in apps:
+        paths_to_check = [
+            f"/sdcard/Android/data/{a}/files/gloop/workspace",
+            f"/data/media/0/Android/data/{a}/files/gloop/workspace" # Alamat Fisik Android Terdalam
+        ]
         
-        if res:
-            # Mengambil USN dari nama file
-            usn = res.split("arsy_usn_")[-1].replace(".txt", "").strip()
-            # Menghapus file agar tidak terbaca ganda
-            subprocess.run(f'su -c "rm -f {res}"', shell=True) 
-            return usn
-    except: return None
+        for check_path in paths_to_check:
+            try:
+                # Menggunakan 'ls' langsung ke target, bukan 'find'
+                cmd = f"su -c 'ls {check_path}/arsy_usn_*.txt 2>/dev/null'"
+                res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+                
+                if res:
+                    # Ambil baris pertama file yang ditemukan
+                    filepath = res.split('\n')[0].strip()
+                    usn = filepath.split("arsy_usn_")[-1].replace(".txt", "").strip()
+                    # Hapus file setelah ditangkap agar tidak dobel
+                    subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
+                    return usn
+            except:
+                pass
     return None
 
 def get_app_ram(pkg):
@@ -106,7 +116,7 @@ while True:
                     config["apps"] = account_map
                     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
                 else:
-                    if uptime_sec > 180: # Tetap di 3 Menit sesuai permintaan
+                    if uptime_sec > 180:
                         state["status"] = "🔴 Disconnect"
                         subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         try:
