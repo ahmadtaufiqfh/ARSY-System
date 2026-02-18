@@ -33,24 +33,22 @@ for a in apps:
 last_ram_clear = time.time()
 
 def scan_for_usn():
-    # RADAR PENDOBRAK: Cek spesifik ke folder masing-masing aplikasi (Bypass Kebutaan Partisi)
     for a in apps:
+        # KOREKSI JALUR: Menambahkan '/external/' sesuai struktur asli Gloop Anda
         paths_to_check = [
-            f"/sdcard/Android/data/{a}/files/gloop/workspace",
-            f"/data/media/0/Android/data/{a}/files/gloop/workspace" # Alamat Fisik Android Terdalam
+            f"/sdcard/Android/data/{a}/files/gloop/external/workspace",
+            f"/data/media/0/Android/data/{a}/files/gloop/external/workspace",
+            f"/sdcard/Delta/workspace" # Jalur Global cadangan
         ]
         
         for check_path in paths_to_check:
             try:
-                # Menggunakan 'ls' langsung ke target, bukan 'find'
                 cmd = f"su -c 'ls {check_path}/arsy_usn_*.txt 2>/dev/null'"
                 res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
                 
                 if res:
-                    # Ambil baris pertama file yang ditemukan
                     filepath = res.split('\n')[0].strip()
                     usn = filepath.split("arsy_usn_")[-1].replace(".txt", "").strip()
-                    # Hapus file setelah ditangkap agar tidak dobel
                     subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
                     return usn
             except:
