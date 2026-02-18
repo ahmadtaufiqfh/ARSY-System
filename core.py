@@ -34,10 +34,13 @@ last_ram_clear = time.time()
 
 def scan_for_usn():
     try:
-        res = subprocess.check_output('su -c "find /sdcard /data/data -name \'arsy_usn_*.txt\' -print -quit 2>/dev/null"', shell=True).decode('utf-8').strip()
-        if res:
-            usn = res.split("arsy_usn_")[-1].replace(".txt", "").strip()
-            subprocess.run(f'su -c "rm -f {res}"', shell=True) 
+        # PLAN B: Menyadap sinyal radio (Logcat) yang ditembakkan oleh Lua
+        res = subprocess.check_output("su -c 'logcat -d | grep \"ARSY_USN:\" | tail -n 1'", shell=True).decode('utf-8').strip()
+        if res and "ARSY_USN:" in res:
+            # Mengekstrak nama dari sinyal
+            usn = res.split("ARSY_USN:")[-1].strip().split()[0]
+            # Menghapus riwayat radio agar nama tidak terbaca ganda
+            subprocess.run("su -c 'logcat -c'", shell=True) 
             return usn
     except: return None
     return None
@@ -56,6 +59,9 @@ def launch_app(pkg):
         subprocess.run(f"su -c 'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else: 
         subprocess.run(f"su -c 'am start -a android.intent.action.VIEW -d \"{ps_link}\" -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+# Membersihkan sinyal lama sebelum sistem berjalan
+subprocess.run("su -c 'logcat -c'", shell=True)
 
 for a in apps:
     launch_app(a)
@@ -101,7 +107,7 @@ while True:
                     config["apps"] = account_map
                     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
                 else:
-                    if uptime_sec > 180: # KEMBALI KE 180 DETIK (3 MENIT)
+                    if uptime_sec > 180:
                         state["status"] = "🔴 Disconnect"
                         subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         try:
