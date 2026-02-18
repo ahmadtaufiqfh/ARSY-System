@@ -34,13 +34,15 @@ last_ram_clear = time.time()
 
 def scan_for_usn():
     try:
-        # PLAN B: Menyadap sinyal radio (Logcat) yang ditembakkan oleh Lua
-        res = subprocess.check_output("su -c 'logcat -d | grep \"ARSY_USN:\" | tail -n 1'", shell=True).decode('utf-8').strip()
-        if res and "ARSY_USN:" in res:
-            # Mengekstrak nama dari sinyal
-            usn = res.split("ARSY_USN:")[-1].strip().split()[0]
-            # Menghapus riwayat radio agar nama tidak terbaca ganda
-            subprocess.run("su -c 'logcat -c'", shell=True) 
+        # PENCARIAN PRESISI: Langsung menembak ke folder workspace milik Gloop
+        cmd = "su -c 'find /sdcard/Android/data/com.roblox.*/files/gloop/workspace -name \"arsy_usn_*.txt\" -print -quit 2>/dev/null'"
+        res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+        
+        if res:
+            # Mengambil USN dari nama file
+            usn = res.split("arsy_usn_")[-1].replace(".txt", "").strip()
+            # Menghapus file agar tidak terbaca ganda
+            subprocess.run(f'su -c "rm -f {res}"', shell=True) 
             return usn
     except: return None
     return None
@@ -59,9 +61,6 @@ def launch_app(pkg):
         subprocess.run(f"su -c 'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else: 
         subprocess.run(f"su -c 'am start -a android.intent.action.VIEW -d \"{ps_link}\" -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-# Membersihkan sinyal lama sebelum sistem berjalan
-subprocess.run("su -c 'logcat -c'", shell=True)
 
 for a in apps:
     launch_app(a)
@@ -107,7 +106,7 @@ while True:
                     config["apps"] = account_map
                     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
                 else:
-                    if uptime_sec > 180:
+                    if uptime_sec > 180: # Tetap di 3 Menit sesuai permintaan
                         state["status"] = "🔴 Disconnect"
                         subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         try:
