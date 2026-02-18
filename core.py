@@ -19,8 +19,7 @@ for a in apps:
         "status": "🟡 Reconnect", 
         "start_time": time.time(),
         "usn": account_map.get(a, a),
-        "script_on": False,
-        "dead": False
+        "script_on": False
     }
 
 last_ram_clear = time.time()
@@ -43,10 +42,13 @@ def get_app_ram(pkg):
     return "0 MB"
 
 def launch_app(pkg):
-    subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True)
+    # Menyembunyikan output terminal bawaan Android agar rapi (stdout=DEVNULL)
+    subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
-    if ps_link == "": subprocess.run(f"su -c 'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {pkg} -f 0x10008000'", shell=True)
-    else: subprocess.run(f"su -c 'am start -a android.intent.action.VIEW -d \"{ps_link}\" -p {pkg} -f 0x10008000'", shell=True)
+    if ps_link == "": 
+        subprocess.run(f"su -c 'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else: 
+        subprocess.run(f"su -c 'am start -a android.intent.action.VIEW -d \"{ps_link}\" -p {pkg} -f 0x10008000'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 for a in apps:
     launch_app(a)
@@ -74,9 +76,7 @@ while True:
             is_open = bool(check_win)
         except: is_open = False
         
-        if state["dead"]:
-            pass 
-        elif not is_open:
+        if not is_open:
             state["script_on"] = False
             state["status"] = "🟡 Reconnect"
             state["start_time"] = time.time() 
@@ -95,9 +95,9 @@ while True:
                     with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
                 else:
                     if uptime_sec > 180:
+                        # Gagal 3 Menit: Force Stop (Loop selanjutnya akan otomatis Relaunch)
                         state["status"] = "🔴 Disconnect"
-                        state["dead"] = True
-                        subprocess.run(f"su -c 'am force-stop {a}'", shell=True)
+                        subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         try:
                             send_emergency_ping(config, state["usn"])
                         except: pass
@@ -105,8 +105,8 @@ while True:
                 state["status"] = "🟢 Connect | scriptON"
 
         color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
-        up_str = format_uptime(time.time() - state["start_time"]) if not state["dead"] else "-"
-        ram_str = get_app_ram(a) if not state["dead"] else "0 MB"
+        up_str = format_uptime(time.time() - state["start_time"])
+        ram_str = get_app_ram(a)
         table.add_row(state["usn"], f"[{color}]{state['status']}[/{color}]", f"[cyan]{up_str}[/cyan]", f"[white]{ram_str}[/white]")
 
     console.print(table)
