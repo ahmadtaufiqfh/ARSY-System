@@ -82,12 +82,12 @@ def format_uptime(seconds):
 while True:
     os.system('clear')
     
-    # PERBAIKAN UI TERMUX: Menghapus expand=True dan menetapkan batasan teks (no_wrap) agar garis sejajar sempurna
-    table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED)
-    table.add_column("IDs", style="white", no_wrap=True, min_width=15)
-    table.add_column("STATUS", justify="left", no_wrap=True, min_width=22)
-    table.add_column("UPTIME", justify="center", no_wrap=True, min_width=10)
-    table.add_column("RAM USAGE", justify="center", no_wrap=True, min_width=10)
+    # PERBAIKAN UI TERMUX: Menggunakan box.MINIMAL (tanpa garis vertikal) & menyingkat header
+    table = Table(title=f"[bold cyan]ARSY MONITOR ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.MINIMAL, expand=False)
+    table.add_column("ID", style="white")
+    table.add_column("STATUS", justify="left")
+    table.add_column("TIME", justify="center")
+    table.add_column("RAM", justify="right")
 
     for a in apps:
         state = app_states[a]
@@ -117,7 +117,8 @@ while True:
                     if new_usn:
                         state["usn"] = new_usn
                         state["script_on"] = True
-                        state["status"] = "🟢 Connect | scriptON"
+                        # Sedikit merampingkan teks agar muat di layar sempit
+                        state["status"] = "🟢 Connect|ON"
                         state["fail_count"] = 0
                         account_map[a] = new_usn
                         config["apps"] = account_map
@@ -136,7 +137,7 @@ while True:
                                 state["status"] = "🔴 Disconnect"
                                 subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
-                state["status"] = "🟢 Connect | scriptON"
+                state["status"] = "🟢 Connect|ON"
                 state["fail_count"] = 0
 
         color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
@@ -162,7 +163,8 @@ while True:
         used_mb = mem_tot - mem_avl
     except: used_mb, mem_tot = 0, 0
 
-    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]", expand=False))
+    # Menghapus Panel border untuk menghemat ruang bawah
+    console.print(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]")
     
     try:
         if "update_discord_dashboard" in globals():
