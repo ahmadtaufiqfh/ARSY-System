@@ -49,7 +49,6 @@ def update_discord_dashboard(config, current_status_dict, start_time_dict, ram_u
         else:
             up_str = format_discord_uptime(uptime_sec)
             
-        # PENAMBAHAN SENSOR: Mengapit {usn} dengan || agar menjadi spoiler di Discord
         desc += f"{icon} ||**{usn}**|| `{clean_status}`\n"
         desc += f"|   `⏱️ {up_str} | 💾 {ram_str}`\n"
 
@@ -76,7 +75,6 @@ def send_emergency_ping(config, usn, reason=""):
     if not raw_webhook: return
     webhook = raw_webhook.split("?")[0].rstrip("/")
     
-    # Menambahkan sensor spoiler juga pada notifikasi darurat / tag @here
     msg = f"@here ⚠️ **PERHATIAN!**\nAkun ||**{usn}**|| mengalami kendala: `{reason}`"
     try:
         requests.post(webhook, json={"content": msg}, timeout=5)
