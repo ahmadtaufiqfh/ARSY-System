@@ -2,11 +2,6 @@ import os, sys, time, json
 import urllib.request
 from rich.console import Console
 
-try:
-    import termios
-except ImportError:
-    pass
-
 console = Console()
 CONFIG_FILE = "arsy_config.json"
 
@@ -15,13 +10,10 @@ MODULES_URL = [
     "https://raw.githubusercontent.com/ahmadtaufiqfh/ARSY-System/main/core.py"
 ]
 
+# 👇 FUNGSI INPUT BARU YANG ANTI-LONCAT 👇
 def safe_input(prompt_text, required=True):
     while True:
-        try:
-            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
-        except: pass
-        console.print(prompt_text, end="")
-        ans = input().strip()
+        ans = console.input(prompt_text).strip()
         if ans: return ans
         if not required: return ""
         console.print("[red]Bagian ini wajib diisi![/red]\n")
