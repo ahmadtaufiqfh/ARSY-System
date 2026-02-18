@@ -1,76 +1,136 @@
-import time, os
+import time, os, subprocess, json
 from rich.table import Table
 from rich import box
 from rich.panel import Panel
 
-CHECK_INTERVAL = 30
-DISCORD_UPDATE_INTERVAL = 60
-
+CHECK_INTERVAL = 15
 ps_link = config.get("ps_link", "")
-account_map = config.get("apps", {})
 
-console.print(f"\n[bold cyan]🚀 Menjalankan {len(apps)} Aplikasi...[/bold cyan]")
-for app in apps:
-    acc_id = account_map.get(app, app)
-    console.print(f"[yellow]🔄 Membuka {acc_id}...[/yellow]")
-    if ps_link == "": run_root(f'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {app} -f 0x10008000')
-    else: run_root(f'am start -a android.intent.action.VIEW -d "{ps_link}" -p {app} -f 0x10008000')
+try:
+    raw_apps = subprocess.check_output("su -c 'pm list packages | grep roblox'", shell=True).decode('utf-8').strip().split('\n')
+    apps = [p.replace('package:', '').strip() for p in raw_apps if p.strip()]
+except:
+    apps = ["com.roblox.client"]
+
+account_map = config.get("apps", {})
+app_states = {}
+for a in apps:
+    app_states[a] = {
+        "status": "🟡 Reconnect", 
+        "start_time": time.time(),
+        "usn": account_map.get(a, a),
+        "script_on": False,
+        "dead": False
+    }
+
+last_ram_clear = time.time()
+
+def scan_for_usn():
+    try:
+        res = subprocess.check_output('su -c "find /sdcard /data/data -name \'arsy_usn_*.txt\' -print -quit 2>/dev/null"', shell=True).decode('utf-8').strip()
+        if res:
+            usn = res.split("arsy_usn_")[-1].replace(".txt", "").strip()
+            subprocess.run(f'su -c "rm -f {res}"', shell=True) 
+            return usn
+    except: return None
+    return None
+
+def get_app_ram(pkg):
+    try:
+        res = subprocess.check_output(f"su -c 'dumpsys meminfo {pkg} | grep \"TOTAL:\"'", shell=True).decode('utf-8')
+        if res: return str(int(res.split()[1]) // 1024) + " MB"
+    except: pass
+    return "0 MB"
+
+def launch_app(pkg):
+    subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True)
+    time.sleep(2)
+    if ps_link == "": subprocess.run(f"su -c 'am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {pkg} -f 0x10008000'", shell=True)
+    else: subprocess.run(f"su -c 'am start -a android.intent.action.VIEW -d \"{ps_link}\" -p {pkg} -f 0x10008000'", shell=True)
+
+for a in apps:
+    launch_app(a)
     time.sleep(12)
 
-last_status = {a: "OFFLINE" for a in apps}
-current_status_dict = {a: "OFFLINE" for a in apps}
-start_time_dict = {a: 0 for a in apps}
-last_clean, last_discord_update = time.time(), 0 
-
-console.print("\n[bold green]✅ Selesai! Memasuki Mode Monitor...[/bold green]")
-time.sleep(2)
+def format_uptime(seconds):
+    h = int(seconds // 3600); m = int((seconds % 3600) // 60); s = int(seconds % 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 while True:
-    console.clear() 
-    if time.time() - last_clean > 1800:
-        for a in apps: run_root(f"rm -rf /data/data/{a}/cache/*")
-        last_clean = time.time()
-
-    table = Table(title=f"[bold cyan]ARSY MONITOR ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED, expand=True)
-    table.add_column("Nama Akun", style="white")
-    table.add_column("Uptime", justify="center")
-    table.add_column("Status", justify="center")
+    os.system('clear')
+    
+    table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED, expand=True)
+    table.add_column("IDs", style="white")
+    table.add_column("STATUS", justify="left")
+    table.add_column("UPTIME", justify="center")
+    table.add_column("RAM USAGE", justify="center")
 
     for a in apps:
-        check_window = run_root(f"dumpsys window windows | grep {a}")
-        current = "ONLINE" if check_window.strip() else "OFFLINE"
-        current_status_dict[a] = current
-        acc_id = account_map.get(a, a)
+        state = app_states[a]
+        uptime_sec = time.time() - state["start_time"]
         
-        if current == "ONLINE" and last_status[a] == "OFFLINE": start_time_dict[a] = time.time()
-        elif current == "OFFLINE": start_time_dict[a] = 0
+        try:
+            check_win = subprocess.check_output(f"su -c 'dumpsys window windows | grep {a}'", shell=True).decode('utf-8').strip()
+            is_open = bool(check_win)
+        except: is_open = False
         
-        if current == "OFFLINE" and last_status[a] == "ONLINE": send_emergency_ping(config, acc_id)
-        last_status[a] = current
-        
-        color = "green" if current == "ONLINE" else "red"
-        up_str = format_uptime(time.time() - start_time_dict[a]) if current == "ONLINE" else "-"
-        table.add_row(acc_id, f"[cyan]{up_str}[/cyan]", f"[bold {color}]{current}[/bold {color}]")
+        if state["dead"]:
+            pass 
+        elif not is_open:
+            state["script_on"] = False
+            state["status"] = "🟡 Reconnect"
+            state["start_time"] = time.time() 
+            launch_app(a)
+        else:
+            if not state["script_on"]:
+                state["status"] = "🟢 Connect"
+                new_usn = scan_for_usn()
+                
+                if new_usn:
+                    state["usn"] = new_usn
+                    state["script_on"] = True
+                    state["status"] = "🟢 Connect | scriptON"
+                    account_map[a] = new_usn
+                    config["apps"] = account_map
+                    with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
+                else:
+                    if uptime_sec > 180:
+                        state["status"] = "🔴 Disconnect"
+                        state["dead"] = True
+                        subprocess.run(f"su -c 'am force-stop {a}'", shell=True)
+                        try:
+                            send_emergency_ping(config, state["usn"])
+                        except: pass
+            else:
+                state["status"] = "🟢 Connect | scriptON"
+
+        color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
+        up_str = format_uptime(time.time() - state["start_time"]) if not state["dead"] else "-"
+        ram_str = get_app_ram(a) if not state["dead"] else "0 MB"
+        table.add_row(state["usn"], f"[{color}]{state['status']}[/{color}]", f"[cyan]{up_str}[/cyan]", f"[white]{ram_str}[/white]")
+
+    console.print(table)
+    
+    if time.time() - last_ram_clear > 1800:
+        try:
+            subprocess.run("su -c 'echo 3 > /proc/sys/vm/drop_caches'", shell=True)
+            last_ram_clear = time.time()
+        except: pass
 
     try:
-        mem_total, mem_avail = 0, 0
+        mem_tot, mem_avl = 0, 0
         with open('/proc/meminfo', 'r') as f:
             lines = f.readlines()
-            mem_total = int(lines[0].split()[1]) // 1024
-            for line in lines:
-                if "MemAvailable" in line: mem_avail = int(line.split()[1]) // 1024; break
-            if mem_avail == 0:
-                for line in lines:
-                     if "MemFree" in line: mem_avail = int(line.split()[1]) // 1024; break
-        used_mb = mem_total - mem_avail
-    except: used_mb, mem_total = 0, 0
+            mem_tot = int(lines[0].split()[1]) // 1024
+            for l in lines:
+                if "MemAvailable" in l: mem_avl = int(l.split()[1]) // 1024; break
+        used_mb = mem_tot - mem_avl
+    except: used_mb, mem_tot = 0, 0
 
-    mode_text = "Private Server" if ps_link != "" else "Normal"
-    console.print(table)
-    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_total}MB | Mode: {mode_text}[/bold green]"))
+    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]"))
     
-    if time.time() - last_discord_update >= DISCORD_UPDATE_INTERVAL:
-        update_discord_dashboard(config, current_status_dict, start_time_dict, used_mb, mem_total, mode_text)
-        last_discord_update = time.time()
-
+    try:
+        update_discord_dashboard(config, {k: app_states[k]["status"] for k in apps}, {k: app_states[k]["start_time"] for k in apps}, used_mb, mem_tot, "")
+    except: pass
+    
     time.sleep(CHECK_INTERVAL)
