@@ -1,4 +1,7 @@
 import time, os, subprocess, json
+from rich.table import Table
+from rich import box
+from rich.panel import Panel
 from rich.console import Console
 
 console = Console()
@@ -23,7 +26,7 @@ account_map = config.get("apps", {})
 app_states = {}
 for a in apps:
     app_states[a] = {
-        "status": "🟡 WAIT", 
+        "status": "🟡 Reconnect", 
         "start_time": time.time(),
         "usn": account_map.get(a, a),
         "script_on": False,
@@ -76,9 +79,9 @@ def scan_for_warnings(pkg, usn):
 def get_app_ram(pkg):
     try:
         res = subprocess.check_output(f"su -c 'dumpsys meminfo {pkg} | grep \"TOTAL:\"'", shell=True).decode('utf-8')
-        if res: return str(int(res.split()[1]) // 1024) + " M"
+        if res: return str(int(res.split()[1]) // 1024) + " MB"
     except: pass
-    return "0 M"
+    return "0 MB"
 
 def launch_app(pkg):
     subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -99,7 +102,12 @@ def format_uptime(seconds):
 while True:
     os.system('clear')
     
-    console.print(f"[bold cyan]=== ARSY MONITOR ({config.get('device_name', 'DEV')}) ===[/bold cyan]\n")
+    # MENGEMBALIKAN FORMAT TABEL KLASIK (Dengan penahan teks no_wrap agar garis lurus)
+    table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED, expand=True)
+    table.add_column("IDs", style="white", no_wrap=True)
+    table.add_column("STATUS", justify="left", no_wrap=True)
+    table.add_column("UPTIME", justify="center", no_wrap=True)
+    table.add_column("RAM USAGE", justify="center", no_wrap=True)
 
     for a in apps:
         state = app_states[a]
@@ -112,24 +120,24 @@ while True:
         
         if not is_open:
             if state.get("suspended"):
-                state["status"] = "⚠️ SUSP"
+                state["status"] = "⚠️ Suspended"
             else:
                 state["script_on"] = False
-                state["status"] = "🟡 WAIT"
+                state["status"] = "🟡 Reconnect"
                 state["start_time"] = time.time() 
                 launch_app(a)
         else:
             if not state["script_on"]:
                 if state.get("suspended"):
-                    state["status"] = "⚠️ SUSP"
+                    state["status"] = "⚠️ Suspended"
                 else:
-                    state["status"] = "🟡 LOAD"
+                    state["status"] = "🟢 Connect"
                     new_usn = scan_for_usn()
                     
                     if new_usn:
                         state["usn"] = new_usn
                         state["script_on"] = True
-                        state["status"] = "🟢 ON"
+                        state["status"] = "🟢 Connect | scriptON"
                         state["fail_count"] = 0
                         account_map[a] = new_usn
                         config["apps"] = account_map
@@ -139,13 +147,13 @@ while True:
                             state["fail_count"] = state.get("fail_count", 0) + 1
                             if state["fail_count"] >= 2:
                                 state["suspended"] = True
-                                state["status"] = "⚠️ SUSP"
+                                state["status"] = "⚠️ Suspended"
                                 try:
                                     if "send_emergency_ping" in globals():
-                                        send_emergency_ping(config, state["usn"], f"Gagal memuat script 2x. Aplikasi dibiarkan terbuka (Suspended).")
+                                        send_emergency_ping(config, state["usn"], "Gagal memuat script 2x. Aplikasi dibiarkan terbuka (Suspended).")
                                 except: pass
                             else:
-                                state["status"] = "🔴 DC"
+                                state["status"] = "🔴 Disconnect"
                                 subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 warn_msg = scan_for_warnings(a, state["usn"])
@@ -158,23 +166,24 @@ while True:
                     
                     subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     state["script_on"] = False
-                    state["status"] = "🟡 WAIT"
+                    state["status"] = "🟡 Reconnect"
                     state["start_time"] = time.time()
                 else:
-                    state["status"] = "🟢 ON"
+                    state["status"] = "🟢 Connect | scriptON"
                     state["fail_count"] = 0
 
         color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
         
-        if "DC" in state["status"] or "SUSP" in state["status"]:
+        if "Disconnect" in state["status"] or "Suspended" in state["status"]:
             up_str = "--:--:--"
         else:
             up_str = format_uptime(time.time() - state["start_time"])
             
         ram_str = get_app_ram(a)
         
-        console.print(f"👤 [bold white]{state['usn']}[/bold white]")
-        console.print(f" └ [{color}]{state['status']}[/{color}] | ⏱️ {up_str} | 💾 {ram_str}\n")
+        table.add_row(state["usn"], f"[{color}]{state['status']}[/{color}]", f"[cyan]{up_str}[/cyan]", f"[white]{ram_str}[/white]")
+
+    console.print(table)
     
     if time.time() - last_ram_clear > 1800:
         try:
@@ -192,7 +201,8 @@ while True:
         used_mb = mem_tot - mem_avl
     except: used_mb, mem_tot = 0, 0
 
-    console.print(f"[bold green]RAM: {used_mb}M / {mem_tot}M[/bold green]")
+    # Mengembalikan Panel border untuk total RAM
+    console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]"))
     
     try:
         if "update_discord_dashboard" in globals():
