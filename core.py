@@ -27,18 +27,19 @@ for a in apps:
         "status": "🟡 Reconnect", 
         "start_time": time.time(),
         "usn": account_map.get(a, a),
-        "script_on": False
+        "script_on": False,
+        "fail_count": 0,
+        "suspended": False
     }
 
 last_ram_clear = time.time()
 
 def scan_for_usn():
     for a in apps:
-        # KOREKSI JALUR: Menambahkan '/external/' sesuai struktur asli Gloop Anda
         paths_to_check = [
             f"/sdcard/Android/data/{a}/files/gloop/external/workspace",
             f"/data/media/0/Android/data/{a}/files/gloop/external/workspace",
-            f"/sdcard/Delta/workspace" # Jalur Global cadangan
+            f"/sdcard/Delta/workspace"
         ]
         
         for check_path in paths_to_check:
@@ -97,32 +98,45 @@ while True:
         except: is_open = False
         
         if not is_open:
-            state["script_on"] = False
-            state["status"] = "🟡 Reconnect"
-            state["start_time"] = time.time() 
-            launch_app(a)
+            if state.get("suspended"):
+                state["status"] = "⚠️ Suspended"
+            else:
+                state["script_on"] = False
+                state["status"] = "🟡 Reconnect"
+                state["start_time"] = time.time() 
+                launch_app(a)
         else:
             if not state["script_on"]:
-                state["status"] = "🟢 Connect"
-                new_usn = scan_for_usn()
-                
-                if new_usn:
-                    state["usn"] = new_usn
-                    state["script_on"] = True
-                    state["status"] = "🟢 Connect | scriptON"
-                    account_map[a] = new_usn
-                    config["apps"] = account_map
-                    with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
+                if state.get("suspended"):
+                    state["status"] = "⚠️ Suspended"
                 else:
-                    if uptime_sec > 180:
-                        state["status"] = "🔴 Disconnect"
-                        subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        try:
-                            if "send_emergency_ping" in globals():
-                                send_emergency_ping(config, state["usn"])
-                        except: pass
+                    state["status"] = "🟢 Connect"
+                    new_usn = scan_for_usn()
+                    
+                    if new_usn:
+                        state["usn"] = new_usn
+                        state["script_on"] = True
+                        state["status"] = "🟢 Connect | scriptON"
+                        state["fail_count"] = 0
+                        account_map[a] = new_usn
+                        config["apps"] = account_map
+                        with open(CONFIG_FILE, "w") as f: json.dump(config, f, indent=4)
+                    else:
+                        if uptime_sec > 180:
+                            state["fail_count"] = state.get("fail_count", 0) + 1
+                            if state["fail_count"] >= 2:
+                                state["suspended"] = True
+                                state["status"] = "⚠️ Suspended"
+                                try:
+                                    if "send_emergency_ping" in globals():
+                                        send_emergency_ping(config, state["usn"], "Gagal memuat script 2x berturut-turut. Aplikasi dibiarkan terbuka.")
+                                except: pass
+                            else:
+                                state["status"] = "🔴 Disconnect"
+                                subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 state["status"] = "🟢 Connect | scriptON"
+                state["fail_count"] = 0
 
         color = "green" if "🟢" in state["status"] else ("yellow" if "🟡" in state["status"] else "red")
         up_str = format_uptime(time.time() - state["start_time"])
