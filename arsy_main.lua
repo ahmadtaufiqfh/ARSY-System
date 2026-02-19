@@ -28,10 +28,10 @@ task.spawn(function()
         end
     end)
     
-    -- Jika ketahuan pindah server, bunyikan alarm dan matikan script
+    -- Jika ketahuan pindah server (sidik jari beda), bunyikan alarm
     if isWrongServer then
         pcall(function()
-            writefile("arsy_warn_" .. usn .. ".txt", "SERVER_CHANGED_OR_RESET")
+            writefile("arsy_warn_" .. usn .. ".txt", "SERVER_CHANGED")
         end)
         return 
     end
