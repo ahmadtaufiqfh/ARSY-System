@@ -24,6 +24,20 @@ except:
 
 account_map = config.get("apps", {})
 app_states = {}
+
+# =======================================================
+# 🧹 FITUR BARU: SAPU BERSIH SISA FILE SEBELUM MULAI
+# Mencegah Termux membaca file USN/Warn bekas sesi sebelumnya
+# =======================================================
+for a in apps:
+    paths_to_clean = [
+        f"/sdcard/Android/data/{a}/files/gloop/external/workspace",
+        f"/data/media/0/Android/data/{a}/files/gloop/external/workspace",
+        f"/sdcard/Delta/workspace"
+    ]
+    for path in paths_to_clean:
+        subprocess.run(f"su -c 'rm -f {path}/arsy_*.txt 2>/dev/null'", shell=True)
+
 for a in apps:
     app_states[a] = {
         "status": "🟡 Reconnect", 
@@ -36,25 +50,23 @@ for a in apps:
 
 last_ram_clear = time.time()
 
-def scan_for_usn():
-    for a in apps:
-        paths_to_check = [
-            f"/sdcard/Android/data/{a}/files/gloop/external/workspace",
-            f"/data/media/0/Android/data/{a}/files/gloop/external/workspace",
-            f"/sdcard/Delta/workspace"
-        ]
-        
-        for check_path in paths_to_check:
-            try:
-                cmd = f"su -c 'ls {check_path}/arsy_usn_*.txt 2>/dev/null'"
-                res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
-                
-                if res:
-                    filepath = res.split('\n')[0].strip()
-                    usn = filepath.split("arsy_usn_")[-1].replace(".txt", "").strip()
-                    subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
-                    return usn
-            except: pass
+# 🔒 PERBAIKAN LOGIKA: Hanya mencari di folder aplikasinya sendiri (pkg), tidak lagi memeriksa semua folder
+def scan_for_usn(pkg):
+    paths_to_check = [
+        f"/sdcard/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/data/media/0/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/sdcard/Delta/workspace"
+    ]
+    for check_path in paths_to_check:
+        try:
+            cmd = f"su -c 'ls {check_path}/arsy_usn_*.txt 2>/dev/null'"
+            res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+            if res:
+                filepath = res.split('\n')[0].strip()
+                usn = filepath.split("arsy_usn_")[-1].replace(".txt", "").strip()
+                subprocess.run(f"su -c 'rm -f \"{filepath}\"'", shell=True)
+                return usn
+        except: pass
     return None
 
 def scan_for_warnings(pkg, usn):
@@ -102,7 +114,6 @@ def format_uptime(seconds):
 while True:
     os.system('clear')
     
-    # MENGEMBALIKAN FORMAT TABEL KLASIK (Dengan penahan teks no_wrap agar garis lurus)
     table = Table(title=f"[bold cyan]ARSY MONITOR LOG ({config.get('device_name', 'DEV')})[/bold cyan]", box=box.ROUNDED, expand=True)
     table.add_column("IDs", style="white", no_wrap=True)
     table.add_column("STATUS", justify="left", no_wrap=True)
@@ -132,7 +143,8 @@ while True:
                     state["status"] = "⚠️ Suspended"
                 else:
                     state["status"] = "🟢 Connect"
-                    new_usn = scan_for_usn()
+                    # Mengirimkan identitas paket (a) agar ia hanya mencari di foldernya sendiri
+                    new_usn = scan_for_usn(a)
                     
                     if new_usn:
                         state["usn"] = new_usn
@@ -201,7 +213,6 @@ while True:
         used_mb = mem_tot - mem_avl
     except: used_mb, mem_tot = 0, 0
 
-    # Mengembalikan Panel border untuk total RAM
     console.print(Panel(f"[bold green]RAM: {used_mb}MB / {mem_tot}MB[/bold green]"))
     
     try:
