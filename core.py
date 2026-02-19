@@ -26,8 +26,7 @@ account_map = config.get("apps", {})
 app_states = {}
 
 # =======================================================
-# 🧹 FITUR BARU: SAPU BERSIH SISA FILE SEBELUM MULAI
-# Mencegah Termux membaca file USN/Warn bekas sesi sebelumnya
+# 🧹 SAPU BERSIH AWAL: Mencegah error sisa sesi sebelumnya
 # =======================================================
 for a in apps:
     paths_to_clean = [
@@ -50,7 +49,6 @@ for a in apps:
 
 last_ram_clear = time.time()
 
-# 🔒 PERBAIKAN LOGIKA: Hanya mencari di folder aplikasinya sendiri (pkg), tidak lagi memeriksa semua folder
 def scan_for_usn(pkg):
     paths_to_check = [
         f"/sdcard/Android/data/{pkg}/files/gloop/external/workspace",
@@ -95,7 +93,20 @@ def get_app_ram(pkg):
     except: pass
     return "0 MB"
 
+# =======================================================
+# 🚀 LAUNCHER & AUTO-BERSIH SIDIK JARI SAAT RESTART
+# =======================================================
 def launch_app(pkg):
+    paths_to_clean = [
+        f"/sdcard/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/data/media/0/Android/data/{pkg}/files/gloop/external/workspace",
+        f"/sdcard/Delta/workspace"
+    ]
+    for path in paths_to_clean:
+        subprocess.run(f"su -c 'rm -f {path}/arsy_lock_*.txt 2>/dev/null'", shell=True)
+        subprocess.run(f"su -c 'rm -f {path}/arsy_warn_*.txt 2>/dev/null'", shell=True)
+        subprocess.run(f"su -c 'rm -f {path}/arsy_usn_*.txt 2>/dev/null'", shell=True)
+        
     subprocess.run(f"su -c 'am force-stop {pkg}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
     if ps_link == "": 
@@ -143,7 +154,6 @@ while True:
                     state["status"] = "⚠️ Suspended"
                 else:
                     state["status"] = "🟢 Connect"
-                    # Mengirimkan identitas paket (a) agar ia hanya mencari di foldernya sendiri
                     new_usn = scan_for_usn(a)
                     
                     if new_usn:
@@ -170,16 +180,20 @@ while True:
             else:
                 warn_msg = scan_for_warnings(a, state["usn"])
                 if warn_msg:
-                    reason_text = "Terlempar ke Public Server!" if warn_msg == "PUBLIC_SERVER" else "Terkena Kick / Warning dari Game!"
+                    if "SERVER_CHANGED" in warn_msg:
+                        reason_text = "Terdeteksi Pindah Server / Mereset Server!"
+                    else:
+                        reason_text = "Terkena Kick / Warning dari Game!"
+                        
                     try:
                         if "send_emergency_ping" in globals():
                             send_emergency_ping(config, state["usn"], reason_text)
                     except: pass
                     
-                    subprocess.run(f"su -c 'am force-stop {a}'", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     state["script_on"] = False
                     state["status"] = "🟡 Reconnect"
                     state["start_time"] = time.time()
+                    launch_app(a)
                 else:
                     state["status"] = "🟢 Connect | scriptON"
                     state["fail_count"] = 0
